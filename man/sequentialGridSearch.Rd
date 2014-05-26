@@ -1,0 +1,42 @@
+\name{sequentialGridSearch}
+\alias{sequentialGridSearch}
+\title{Optimize a function returning a single numeric value subject to a boolean constraint
+Utilizes a naive recursive grid search.}
+\usage{
+  sequentialGridSearch(f, constraint, bounds, nEach = 40,
+    shrink = 10, tol = .Machine$double.eps^0.5,
+    verbose = FALSE, ...)
+}
+\arguments{
+  \item{f}{Function to be minimized: takes a single numeric
+  value and returns a single numeric value.}
+
+  \item{constraint}{Function of a single variable returning
+  a single boolean value (must be TRUE to be at the
+  optimum).}
+
+  \item{bounds}{A numeric vector of length two which are
+  the upper and lower bounds of the input to try.}
+
+  \item{nEach}{Number of points n each round of grid
+  searching to use.}
+
+  \item{shrink}{Factor indicating how much (1/shrink) to
+  narrow the search width by each round; highly recommended
+  that shrink is at least half the size of nEach.}
+
+  \item{tol}{The tolerance (epsilon).}
+
+  \item{verbose}{Whether to display verbose output.}
+
+  \item{\dots}{Arguments to pass along to constraint.}
+}
+\value{
+  The optimized input value (numeric).
+}
+\description{
+  Optimize a function returning a single numeric value
+  subject to a boolean constraint Utilizes a naive
+  recursive grid search.
+}
+

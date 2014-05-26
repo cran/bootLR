@@ -1,0 +1,3 @@
+S3method(print,lrtest)
+export(BayesianLR.test)
+export(print.lrtest)

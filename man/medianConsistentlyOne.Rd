@@ -1,0 +1,38 @@
+\name{medianConsistentlyOne}
+\alias{medianConsistentlyOne}
+\title{Find the lowest population probability whose median is consistently one
+This is the lowest estimate for Sens that is consistently (over 5 runs) most likely to yield a sample estimate that is all 1's (e.g. 100/100, etc.).}
+\usage{
+  medianConsistentlyOne(pr, size, R, nConsistentRuns = 5,
+    warn = TRUE)
+}
+\arguments{
+  \item{pr}{Probability input.}
+
+  \item{size}{Number of trials.}
+
+  \item{R}{number of bootstrap replications.}
+
+  \item{nConsistentRuns}{Number of runs that all have to be
+  identical to return TRUE.}
+
+  \item{warn}{Warn if searching outside of the range
+  c(0,1).}
+}
+\value{
+  Boolean of length one (TRUE or FALSE).
+}
+\description{
+  Find the lowest population probability whose median is
+  consistently one This is the lowest estimate for Sens
+  that is consistently (over 5 runs) most likely to yield a
+  sample estimate that is all 1's (e.g. 100/100, etc.).
+}
+\examples{
+\dontrun{
+prs <- seq(.990,.995,.0001)
+bools <- sapply( prs, medianConsistentlyOne, size=truePos, R=R )
+data.frame( prs, bools )
+}
+}
+
