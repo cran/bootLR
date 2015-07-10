@@ -1,0 +1,9 @@
+bootLR v1.0 (Release date: 2015-07-10)
+=================
+
+Changes:
+
+* Many minor fixes
+* Replaced a grid search with a direct application of the binomial distribution, yielding marked speed improvements
+* Reduced the number of bootstrap replicates to 10,000 (from 50k), but added an outer loop to average 50 bootstrap estimations, yielding speed reductions but more stable estimates.
+* This is the initial full release, and coincides with the release of the corresponding methodological paper in SMMR: http://dx.doi.org/10.1177/0962280215592907

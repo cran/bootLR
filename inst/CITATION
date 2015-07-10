@@ -1,0 +1,19 @@
+
+
+year <- sub("-.*", "", meta$Date)
+note <- sprintf("Implemented in the bootLR R package version %s", meta$Version)
+
+bibentry(bibtype = "Article",
+         title = "Estimating Negative Likelihood Ratio Confidence When Test Sensitivity is 100%: A Bootstrapping Approach",
+         author = c(person("KA", "Marill"),
+                    person("Y", "Chang"),
+                    person("KF", "Wong"),
+                    person("AB", "Friedman")),
+         year = 2015L,
+	 doi = "10.1177/0962280215592907",
+	 journal = "Stat Methods Med Res",
+         note = note,
+         url = "http://CRAN.R-project.org/package=nlme")
+
+
+
