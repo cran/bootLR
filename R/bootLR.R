@@ -7,12 +7,14 @@
 #' @param totalDzNeg The total number of negatives ("well") in the population.
 #' @return A one-row matrix containing sensitivity, specificity, posLR, negLR results.
 #' @references Deeks JJ, Altman DG. BMJ. 2004 July 17; 329(7458): 168-169.
+#' @export confusionStatistics
 #' @examples
 #' \dontrun{
 #' confusionStatistics( 25, 50, 45, 75 )
 #' }
 confusionStatistics <- function( truePos, totalDzPos, trueNeg, totalDzNeg ) {
   n <- length(truePos)
+  if( length(truePos) != length(totalDzPos) | length(truePos) != length(trueNeg) | length(truePos) != length(totalDzNeg) )  stop("Lengths of the input vectors must match.")
   res <- matrix( NA, ncol=4, nrow=n )
   colnames(res) <- c("sens","spec","posLR","negLR")
   res[,"sens"] <- truePos / totalDzPos
@@ -20,6 +22,127 @@ confusionStatistics <- function( truePos, totalDzPos, trueNeg, totalDzNeg ) {
   res[,"posLR"] <- res[,"sens"] / ( 1 - res[,"spec"] )
   res[,"negLR"] <- ( 1 - res[,"sens"] ) / res[,"spec"]
   res
+}
+
+#' Compute values and confidence intervals for sensitivity, specificity, positive likelihood ratio, negative likelihood ratio for a single 2x2 table
+#' @param truePos The number of true positive tests.
+#' @param totalDzPos The total number of positives ("sick") in the population.
+#' @param trueNeg The number of true negatives in the population.
+#' @param totalDzNeg The total number of negatives ("well") in the population.
+#' @param calcLRCI Method to use to calculate the LR CI: "BayesianLR.test" "none" or "analytic"
+#' @param \dots Arguments to pass to Bayesian.LRtest. 
+#' @param alpha The alpha for the width of the confidence interval (defaults to alpha = 0.05 for a 95 percent CI)
+#' @param binomMethod The method to be passed to binom.confint to calculate confidence intervals of proportions (sensitivity, etc.).  See help("binom.confint") and the Newcombe article referenced below.
+#' @return A matrix containing sensitivity, specificity, posLR, negLR results and their confidence intervals
+#' @references Deeks JJ, Altman DG. BMJ. 2004 July 17; 329(7458): 168-169. Newcombe RG. Statist Med. 1998; 17(857-872).
+#' @export diagCI
+#' @examples
+#' \dontrun{
+#' diagCI( 25, 50, 45, 75 )
+#' diagCI( truePos = c(25, 30), totalDzPos = c( 50, 55 ), trueNeg = c(5, 35), totalDzNeg = c(60,65) )
+#' }
+diagCI <- function( truePos, totalDzPos, trueNeg, totalDzNeg, calcLRCI = "BayesianLR.test", alpha = 0.05, binomMethod = "wilson", ... ) {
+  # Validate inputs
+  if( !calcLRCI %in% c("BayesianLR.test", "none", "analytic") )  stop( "calcLRCI is not a valid option" )
+  if( alpha <= 0 | alpha >= 1 )  stop( "alpha must be between 0 and 1" )
+  if( binomMethod == "all" | length( binomMethod ) != 1 )  stop( "Only one method allowed" )
+  if( length(truePos) != length(totalDzPos) | length(truePos) != length(trueNeg) | length(truePos) != length(totalDzNeg) )  stop("Lengths of the input vectors must match.")
+  # Other values needed
+  conf.level <- 1 - alpha
+  Z <- stats::qnorm( 1 - alpha / 2 )
+  n <- length(truePos)
+  # Calculate the rest of the 2x2 table
+  falsePos <- totalDzNeg - trueNeg # "b"
+  falseNeg <- totalDzPos - truePos # "c"
+  # Define a function to return the proportion and its confidence interval
+  calcPropCI <- function( x, n, binomMethod, conf.level, propname = "prop" ) {
+    dat <- data.frame( prop = x / n )
+    binomCI <- binom::binom.confint( x, n, methods = binomMethod, conf.level = conf.level )
+    dat$prop_LB <- binomCI$lower
+    dat$prop_UB <- binomCI$upper
+    colnames( dat ) <- sub( "^prop", propname, colnames( dat ) )
+    dat
+  }
+  # Run that function across all statistics
+  statInputs <- list( 
+    list( propname = "sens", x = truePos, n = totalDzPos ),
+    list( propname = "spec", x = trueNeg, n = totalDzNeg ),
+    list( propname = "PPV", x = truePos, n = truePos + falsePos ),
+    list( propname = "NPV", x = trueNeg, n = trueNeg + falseNeg )
+  )
+  resList <- lapply( statInputs, FUN = function( l, binomMethod, conf.level ) {
+    calcPropCI( l$x, l$n, binomMethod = binomMethod, conf.level = conf.level, propname = l$propname )
+  }, binomMethod = binomMethod, conf.level = conf.level )
+  res <- do.call( cbind, resList )
+  # Positive/Negative LR point estimates
+  cs <- mapply(
+    FUN = confusionStatistics,
+    truePos = truePos, totalDzPos = totalDzPos, trueNeg = trueNeg, totalDzNeg = totalDzNeg,
+    SIMPLIFY = FALSE
+  )
+  csDF <- t( vapply( cs, FUN = function(x) unlist(x[ 1, grep( "LR", colnames(x) ) ]), FUN.VALUE = rep(NA_real_,2) ) ) 
+  na <- rep( NA_real_, length( truePos ) )
+  res <- cbind( res, data.frame( posLR = na, posLR_LB = na, posLR_UB = na, negLR = na, negLR_LB = na, negLR_UB = na ) )
+  res[,"posLR"] <- csDF[,"posLR"]
+  res[,"negLR"] <- csDF[,"negLR"]
+  # Positive/Negative LR confidence intervals
+  if( calcLRCI == "BayesianLR.test" ) {
+    blrt <- mapply(
+      FUN = BayesianLR.test,
+      truePos = truePos, totalDzPos = totalDzPos, trueNeg = trueNeg, totalDzNeg = totalDzNeg,
+      SIMPLIFY = FALSE,
+      ...
+    )
+    blrtDF <- t( vapply( blrt, FUN = function(x) unlist(x[ grep( "LR", names(x) ) ]), FUN.VALUE = rep(NA_real_,6) ) ) 
+    res[,"posLR"] <- blrtDF[,"posLR"]
+    res[,"posLR_LB"] <- apply( blrtDF[ , grep( "posLR.ci", colnames( blrtDF ) ), drop = FALSE ], 1, min ) 
+    res[,"posLR_UB"] <- apply( blrtDF[ , grep( "posLR.ci", colnames( blrtDF ) ), drop = FALSE ], 1, max ) 
+    res[,"negLR"] <- blrtDF[,"negLR"]
+    res[,"negLR_LB"] <- apply( blrtDF[ , grep( "negLR.ci", colnames( blrtDF ) ), drop = FALSE ], 1, min ) 
+    res[,"negLR_UB"] <- apply( blrtDF[ , grep( "negLR.ci", colnames( blrtDF ) ), drop = FALSE ], 1, max ) 
+  } else if( calcLRCI == "analytic" ) {
+    # Analytic solution to LR CI
+    posLRSE <- sqrt( (1/truePos) - (1/(truePos+falseNeg)) + (1/falsePos) - (1/(falsePos+trueNeg))  )
+    res[,"posLR_LB"] <- exp( log( res[,"posLR"] ) - Z * posLRSE )
+    res[,"posLR_UB"] <- exp( log( res[,"posLR"] ) + Z * posLRSE )
+    negLRSE <- sqrt( (1/falseNeg) - (1/(truePos+falseNeg)) + (1/trueNeg) - (1/(falsePos+trueNeg)) )
+    res[,"negLR_LB"] <- exp( log( res[,"negLR"] ) - Z * negLRSE )
+    res[,"negLR_UB"] <- exp( log( res[,"negLR"] ) + Z * negLRSE )
+  }
+  # Add the input data
+  res <- cbind( truePos, totalDzPos, trueNeg, totalDzNeg, res )
+  # Return
+  structure( res, class = c("diagCI","data.frame"), calcLRCI = calcLRCI, alpha = alpha, conf.level = conf.level, binomMethod = binomMethod )
+}
+
+#' Prints results from diagCI
+#' As is typical for R, this is run automatically when you type in an object name, and is typically not run directly by the end-user.
+#' @param x The diagCI object created by diagCI()
+#' @param digits Number of digits to round to
+#' @param \dots Pass-alongs (currently ignored).
+#' @return Returns x unaltered.
+#' @method print diagCI 
+#' @export
+#' @examples
+#' \dontrun{
+#' diagCI( 25, 50, 45, 75 )
+#' }
+print.diagCI <- function( x, digits = 3, ... ) {
+  apply( x, 1, function( rw ) {
+    # Print the 2x2 table
+    twoByTwo <- matrix( data = c( rw["truePos"], rw["totalDzPos"] - rw["truePos"], rw["totalDzNeg"] - rw["trueNeg"], rw["trueNeg"] ), nrow = 2, ncol = 2, dimnames = list( c("Test Positive", "Test Negative"), c("Condition Positive", "Condition Negative") ) )
+    print( twoByTwo )
+    # Print the diagnostic statistics
+    rw <- rw[ seq( -1, -4, -1 ) ]
+    rwMat <- matrix( rw, nrow = 3 )
+    rwMat <- round( rwMat, digits )
+    rwMat <- rbind( names( rw )[ seq( 1, length( rw ), 3 ) ], rwMat )
+    statistics <- apply( rwMat, 2, function( d ) {
+      paste0( d[1], " ", d[2], " ( ", d[3], " - ", d[4], " )" )
+    } )
+    for (s in statistics) { print( s ) }
+  } )
+  invisible( x )
 }
 
 # ----- Optimization tools ----- #
@@ -155,12 +278,12 @@ sequentialGridSearch <- function( f, constraint, bounds, nEach=40, shrink=10, to
 BayesianLR.test <- function( truePos, totalDzPos, trueNeg, totalDzNeg, R=10^4, nBSave=50, verbose=FALSE, parameters=list(shrink=5,tol=.0005,nEach=80), maxTries = 20, ci.width = 0.95, consistentQuantile = 0.5, ... ) {
   # Run the algorithm once, expand criteria if it fails
   convergeFailText <- "try setting a looser tolerance, a lower shrinkage value, or a higher number for neach" # Error text that indicates a failure of convergence
-  res <- structure(NULL,class="try-error",condition=convergeFailText)
+  res <- structure( list() ,class="try-error",condition=convergeFailText)
   tries <- 1
   while( class(res) == "try-error"  &  tries < maxTries ) {
     if( verbose & tries > 1 )  message("Failed to reach convergence in trial number ", tries-1, ".\nRunning trial number ", tries, " to see if we can reach convergence. New parameters: \nShrink ", parameters$shrink, "\nTolerance ", parameters$tol, "\nnEach ", parameters$nEach,"\n" )
     res <- try( run.BayesianLR.test( truePos = truePos, totalDzPos = totalDzPos, trueNeg = trueNeg, totalDzNeg = totalDzNeg, R = R, verbose = verbose, parameters = parameters, ci.width = ci.width, consistentQuantile = consistentQuantile ) )
-    if( class(res) == "try-error"  &&  !grepl( convergeFailText, tolower( as.character( attributes(res)$condition ) ) ) )  stop( as.character( attributes(res)$condition ) )
+    if( class(res) == "try-error"  &&  !grepl( convergeFailText, tolower( as.character( attributes(res)$condition ) ) ) )  stop( as.character( attributes(res)$condition ) ) # Unless the error message captured indicates to try again with looser tolerances, fail and return the error message captured from run.BayesianLR.test
     parameters$tol <- ifelse( parameters$tol > .001, parameters$tol, .001 )
     parameters$shrink <- (parameters$shrink - 1) * .65 + 1
     parameters$nEach <- floor( parameters$nEach * 1.3 )
@@ -225,6 +348,10 @@ run.BayesianLR.test <- function( truePos, totalDzPos, trueNeg, totalDzNeg, R=10^
       R=R
     )$t
   }
+  
+  # Test that we don't have any cases where sensb and specb happen to both be 0/1 simultaneously
+  if( any(apply( data.frame( sensb, specb ), 1, function(x)  x[1] == 1 & x[2] == 0 )) )
+    stop("In some of your draws, sensitivity was 1 at the same time that specificity was 0. This most likely resulted because you had a sensitivity of 1 and a specificity of close to 0, or vice-versa. The algorithm is not designed to handle this case, and may not ever be. Please do not just re-run the algorithm until you no longer receive this message, as the confidence intervals so obtained will be invalid.")
   
   # -- Compute pos/neg LRs and their BCa confidence intervals -- #
   negLR <- unname( ( 1 - cs[,"sens"] ) / cs[,"spec"]  )
@@ -318,7 +445,7 @@ bca <- function( t, t0, ... ) {
 #' @param digits Number of digits to round to for display purposes
 #' @param \dots Pass-alongs (currently ignored).
 #' @return Returns x unaltered.
-#' @method print lrtest
+#' @method print lrtest 
 #' @export
 #' @examples
 #' \dontrun{

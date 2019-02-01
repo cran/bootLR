@@ -1,3 +1,12 @@
+bootLR v1.0.2 (Release date: 2018-06-17)
+=================
+
+Changes:
+
+* Updated package to remain compatible with latest R changes
+* confusionStatistics() is now an exported function
+* diagCI() now returns the various common 2x2 table diagnostic summary statistics and their confidence intervals
+
 bootLR v1.0 (Release date: 2015-07-10)
 =================
 
